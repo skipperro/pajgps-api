@@ -11,17 +11,20 @@ from .models.auth import AuthResponse
 class PajGpsRequests(ABC):
     """Low-level async HTTP client with retry, timeout, and token management."""
 
+    DEFAULT_BASE_URL: str = "https://connect.paj-gps.de/"
+
     def __init__(
         self,
         email: Optional[str] = None,
         password: Optional[str] = None,
         timeout: int = 5,
         max_retries: int = 3,
+        base_url: Optional[str] = None,
     ) -> None:
         self.email: Optional[str] = email
         self.password: Optional[str] = password
         self._session: Optional[aiohttp.ClientSession] = None
-        self.base_url: str = "https://connect.paj-gps.de/"
+        self.base_url: str = base_url or self.DEFAULT_BASE_URL
         self.token: Optional[str] = None
         self.refresh_token: Optional[str] = None
         self.user_id: Optional[int] = None

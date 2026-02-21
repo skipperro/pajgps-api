@@ -135,5 +135,6 @@ api = PajGpsApi(
     password="your_password",
     timeout=5,       # base timeout (seconds) for the first attempt
     max_retries=3,   # total number of attempts
+    base_url="https://connect.paj-gps.de/",  # optional, override if the API URL changes
 )
 ```
