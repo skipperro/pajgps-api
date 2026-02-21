@@ -10,38 +10,43 @@ pip install pajgps-api
 
 ## Usage
 
+All API methods are **async** and must be awaited. Use `asyncio.run()` or an existing event loop.
+
 ```python
+import asyncio
 from pajgps_api import PajGpsApi
 
-# Initialize the API
-api = PajGpsApi(email="your_email@example.com", password="your_password")
+async def main():
+    # Initialize the API (can also be used as an async context manager)
+    async with PajGpsApi(email="your_email@example.com", password="your_password") as api:
+        # Log in
+        try:
+            await api.login()
+            print(f"Logged in successfully! User ID: {api.user_id}")
+        except Exception as e:
+            print(f"Login failed: {e}")
 
-# Log in
-try:
-    api.login()
-    print(f"Logged in successfully! User ID: {api.user_id}")
-except Exception as e:
-    print(f"Login failed: {e}")
+        # Subsequent requests will automatically use the token and refresh it if needed.
 
-# Subsequent requests will automatically use the token and refresh it if needed.
+        # Reading Devices
+        devices = await api.get_devices()
+        for device in devices:
+            print(f"ID: {device.id}, Name: {device.name}, IMEI: {device.imei}")
 
-# Reading Devices
-devices = api.get_devices()
-for device in devices:
-    print(f"ID: {device.id}, Name: {device.name}, IMEI: {device.imei}")
+        # Current Positions for all devices
+        device_ids = [device.id for device in devices]
+        if device_ids:
+            last_positions = await api.get_all_last_positions(device_ids)
+            for pos in last_positions:
+                print(f"Device {pos.iddevice}: Lat {pos.lat}, Lng {pos.lng}, Speed {pos.speed}")
 
-# Current Positions for all devices
-device_ids = [device.id for device in devices]
-if device_ids:
-    last_positions = api.get_all_last_positions(device_ids)
-    for pos in last_positions:
-        print(f"Device {pos.iddevice}: Lat {pos.lat}, Lng {pos.lng}, Speed {pos.speed}")
+        # Voltage Sensor (for the first device)
+        if devices:
+            sensor_data = await api.get_last_sensor_data(devices[0].id)
+            if hasattr(sensor_data, "volt"):
+                print(f"Voltage: {sensor_data.volt} mV")
 
-# Voltage Sensor (for the first device)
-if devices:
-    sensor_data = api.get_last_sensor_data(devices[0].id)
-    if hasattr(sensor_data, "volt"):
-        print(f"Voltage: {sensor_data.volt} mV")
+asyncio.run(main())
 ```
 
 

@@ -14,7 +14,7 @@ set -euo pipefail
 
 PACKAGE_NAME="pajgps-api"
 IMPORT_NAME="pajgps_api"
-EXPECTED_VERSION="0.2.0"
+EXPECTED_VERSION="0.2.1"
 
 TMPDIR="$(mktemp -d)"
 VENV_DIR="$TMPDIR/venv"

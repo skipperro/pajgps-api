@@ -345,7 +345,7 @@ class TestTrackingIntegration(unittest.IsolatedAsyncioTestCase):
             self.assertIsInstance(result, SensorData)
             self.assertTrue(hasattr(result, "volt"))
             self.assertTrue(hasattr(result, "did"))
-            print(f"\nDevice {device_id}: voltage={result.volt}V")
+            print(f"\nDevice {device_id}: voltage={result.volt}mV")
         except PajGpsApiError:
             # Some devices may not have sensor data, returning an unexpected format
             print(f"\nDevice {device_id}: no sensor data available")
