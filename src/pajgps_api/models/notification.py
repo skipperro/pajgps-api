@@ -1,9 +1,34 @@
+from typing import Any, Optional
+
 from .base import BaseModel
-from typing import Optional
 
 
 class Notification(BaseModel):
     """Notification model."""
+
+    id: int
+    iddevice: int
+    icon: str
+    bezeichnung: str
+    meldungtyp: int  # alert_type
+    dateunix: int
+    lat: float
+    lng: float
+    isread: int
+    radiusin: int
+    radiusout: int
+    zuendon: int
+    zuendoff: int
+    push: int
+    suppressed: int
+    name: Optional[str] = None
+    meldung: Optional[str] = None
+    imei: Optional[str] = None
+    speed: Optional[int] = None
+    speederlaubt: Optional[int] = None
+    audio_file_name: Optional[str] = None
+    email: Optional[str] = None
+    deleted_at: Optional[str] = None
 
     def __init__(
         self,
@@ -11,7 +36,7 @@ class Notification(BaseModel):
         iddevice: int,
         icon: str,
         bezeichnung: str,
-        meldungtyp: int,    # alert_type
+        meldungtyp: int,
         dateunix: int,
         lat: float,
         lng: float,
@@ -30,8 +55,8 @@ class Notification(BaseModel):
         audio_file_name: Optional[str] = None,
         email: Optional[str] = None,
         deleted_at: Optional[str] = None,
-        **kwargs
-    ):
+        **kwargs: Any,
+    ) -> None:
         self.id = id
         self.iddevice = iddevice
         self.name = name

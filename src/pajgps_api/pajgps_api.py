@@ -1,5 +1,7 @@
-from typing import Optional, Union, Any
+from typing import Any, Dict, List, Optional, Union
+
 import requests
+
 from .alert_types import AlertType
 from .pajgps_requests import PajGpsRequests
 from .pajgps_api_error import AuthenticationError, TokenRefreshError
@@ -25,16 +27,16 @@ class PajGpsApi(PajGpsRequests):
         if not email or not password:
             raise AuthenticationError("Email and password are required for login.")
 
-        params = {
+        params: Dict[str, str] = {
             "email": email,
             "password": password
         }
         
-        url = f"{self.base_url.rstrip('/')}/api/v1/login"
+        url: str = f"{self.base_url.rstrip('/')}/api/v1/login"
         try:
             response = self._execute_request("POST", url, params=params, refresh_on_401=False)
-            data = response.json()
-            
+            data: Dict[str, Any] = response.json()
+
             if "success" in data:
                 self.token = data["success"]["token"]
                 self.refresh_token = data["success"]["refresh_token"]
@@ -53,16 +55,16 @@ class PajGpsApi(PajGpsRequests):
         if not self.email or not self.refresh_token:
             raise TokenRefreshError("Email and refresh token are required to refresh the token.")
 
-        params = {
+        params: Dict[str, str] = {
             "email": self.email,
             "refresh_token": self.refresh_token
         }
         
-        url = f"{self.base_url.rstrip('/')}/api/v1/updatetoken"
+        url: str = f"{self.base_url.rstrip('/')}/api/v1/updatetoken"
         try:
             response = self._execute_request("POST", url, params=params, refresh_on_401=False)
-            data = response.json()
-            
+            data: Dict[str, Any] = response.json()
+
             if "success" in data:
                 self.token = data["success"]["token"]
                 self.refresh_token = data["success"]["refresh_token"]
@@ -75,9 +77,9 @@ class PajGpsApi(PajGpsRequests):
 
     # ── Device endpoints ──────────────────────────────────────────────
 
-    def get_devices(self):
+    def get_devices(self) -> List[Device]:
         """Get data for all devices the user has permission to view."""
-        data = self._request("GET", "api/v1/device")
+        data: Dict[str, Any] = self._request("GET", "api/v1/device")
         if "success" in data:
             success_data = data["success"]
             if isinstance(success_data, list):
@@ -85,9 +87,9 @@ class PajGpsApi(PajGpsRequests):
             return success_data
         return data
 
-    def get_device(self, device_id):
+    def get_device(self, device_id: int) -> Device:
         """Get data for a single device by its ID."""
-        data = self._request("GET", f"api/v1/device/{device_id}")
+        data: Dict[str, Any] = self._request("GET", f"api/v1/device/{device_id}")
         if "success" in data:
             success_data = data["success"]
             if isinstance(success_data, dict):
@@ -95,9 +97,9 @@ class PajGpsApi(PajGpsRequests):
             return success_data
         return data
 
-    def update_device(self, device_id, **kwargs):
+    def update_device(self, device_id: int, **kwargs: Any) -> Device:
         """Update a device by its ID. Pass device fields as keyword arguments."""
-        data = self._request("PUT", f"api/v1/device/{device_id}", json=kwargs)
+        data: Dict[str, Any] = self._request("PUT", f"api/v1/device/{device_id}", json=kwargs)
         if "success" in data:
             success_data = data["success"]
             if isinstance(success_data, dict):
@@ -107,7 +109,14 @@ class PajGpsApi(PajGpsRequests):
 
     # ── Tracking Data endpoints ───────────────────────────────────────
 
-    def get_tracking_data_last_minutes(self, device_id, last_minutes, gps=None, wifi=None, sort=None):
+    def get_tracking_data_last_minutes(
+        self,
+        device_id: int,
+        last_minutes: int,
+        gps: Optional[int] = None,
+        wifi: Optional[int] = None,
+        sort: Optional[str] = None,
+    ) -> List[TrackPoint]:
         """Get device tracking data based on last minutes.
 
         Args:
@@ -117,7 +126,7 @@ class PajGpsApi(PajGpsRequests):
             wifi: Optional. 0 or 1 to include Wi-Fi points.
             sort: Optional. Sort order based on id (default descending).
         """
-        params = {"lastMinutes": last_minutes}
+        params: Dict[str, Any] = {"lastMinutes": last_minutes}
         if gps is not None:
             params["gps"] = gps
         if wifi is not None:
@@ -132,7 +141,14 @@ class PajGpsApi(PajGpsRequests):
             return success_data
         return data
 
-    def get_tracking_data_last_points(self, device_id, last_points, gps=None, wifi=None, sort=None):
+    def get_tracking_data_last_points(
+        self,
+        device_id: int,
+        last_points: int,
+        gps: Optional[int] = None,
+        wifi: Optional[int] = None,
+        sort: Optional[str] = None,
+    ) -> List[TrackPoint]:
         """Get device tracking data based on last points.
 
         Args:
@@ -142,7 +158,7 @@ class PajGpsApi(PajGpsRequests):
             wifi: Optional. 0 or 1 to include Wi-Fi points.
             sort: Optional. Sort order based on id (default descending).
         """
-        params = {"lastPoints": last_points}
+        params: Dict[str, Any] = {"lastPoints": last_points}
         if gps is not None:
             params["gps"] = gps
         if wifi is not None:
@@ -157,7 +173,15 @@ class PajGpsApi(PajGpsRequests):
             return success_data
         return data
 
-    def get_tracking_data_date_range(self, device_id, date_start, date_end, gps=None, wifi=None, sort=None):
+    def get_tracking_data_date_range(
+        self,
+        device_id: int,
+        date_start: int,
+        date_end: int,
+        gps: Optional[int] = None,
+        wifi: Optional[int] = None,
+        sort: Optional[str] = None,
+    ) -> List[TrackPoint]:
         """Get device tracking data based on a date range.
 
         Args:
@@ -168,7 +192,7 @@ class PajGpsApi(PajGpsRequests):
             wifi: Optional. 0 or 1 to include Wi-Fi points.
             sort: Optional. Sort order based on id (default descending).
         """
-        params = {"dateStart": date_start, "dateEnd": date_end}
+        params: Dict[str, Any] = {"dateStart": date_start, "dateEnd": date_end}
         if gps is not None:
             params["gps"] = gps
         if wifi is not None:
@@ -183,14 +207,18 @@ class PajGpsApi(PajGpsRequests):
             return success_data
         return data
 
-    def get_all_last_positions(self, device_ids, from_last_point=False):
+    def get_all_last_positions(
+        self,
+        device_ids: List[int],
+        from_last_point: bool = False,
+    ) -> List[TrackPoint]:
         """Get all last positions for the given devices.
 
         Args:
             device_ids: List of device IDs (integers).
             from_last_point: If True, returns all points from the last known dateunix.
         """
-        body = {"deviceIDs": device_ids, "fromLastPoint": from_last_point}
+        body: Dict[str, Any] = {"deviceIDs": device_ids, "fromLastPoint": from_last_point}
         data = self._request("POST", "api/v1/trackerdata/getalllastpositions", json=body)
         if "success" in data:
             success_data = data["success"]
@@ -199,13 +227,13 @@ class PajGpsApi(PajGpsRequests):
             return success_data
         return data
 
-    def get_last_sensor_data(self, device_id):
+    def get_last_sensor_data(self, device_id: int) -> SensorData:
         """Get last sensor (voltage) data for a device.
 
         Args:
             device_id: The device ID.
         """
-        data = self._request("GET", f"api/v1/sensordata/last/{device_id}")
+        data: Dict[str, Any] = self._request("GET", f"api/v1/sensordata/last/{device_id}")
         if "success" in data:
             success_data = data["success"]
             if isinstance(success_data, dict):
@@ -215,14 +243,18 @@ class PajGpsApi(PajGpsRequests):
 
     # ── Notification endpoints ────────────────────────────────────────
 
-    def get_notifications(self, alert_type=None, is_read=None):
+    def get_notifications(
+        self,
+        alert_type: Optional[Union[AlertType, int]] = None,
+        is_read: Optional[int] = None,
+    ) -> List[Notification]:
         """Get notifications for all devices.
 
         Args:
             alert_type: Optional. Use AlertType constants or an int (1..22).
             is_read: Optional. 0 for unread, 1 for read.
         """
-        params = {}
+        params: Dict[str, Any] = {}
         if alert_type is not None:
             params["alertType"] = _normalize_alert_type(alert_type)
         if is_read is not None:
@@ -236,7 +268,12 @@ class PajGpsApi(PajGpsRequests):
             return success_data
         return data
 
-    def get_device_notifications(self, device_id, alert_type=None, is_read=None):
+    def get_device_notifications(
+        self,
+        device_id: int,
+        alert_type: Optional[Union[AlertType, int]] = None,
+        is_read: Optional[int] = None,
+    ) -> List[Notification]:
         """Get notifications for a single device.
 
         Args:
@@ -244,7 +281,7 @@ class PajGpsApi(PajGpsRequests):
             alert_type: Optional. Use AlertType constants or an int (1..22).
             is_read: Optional. 0 for unread, 1 for read.
         """
-        params = {}
+        params: Dict[str, Any] = {}
         if alert_type is not None:
             params["alertType"] = _normalize_alert_type(alert_type)
         if is_read is not None:
@@ -258,7 +295,15 @@ class PajGpsApi(PajGpsRequests):
             return success_data
         return data
 
-    def get_custom_notifications(self, device_id, start_date, end_date, alert_type=None, count=None, is_read=None):
+    def get_custom_notifications(
+        self,
+        device_id: int,
+        start_date: int,
+        end_date: int,
+        alert_type: Optional[Union[AlertType, int]] = None,
+        count: Optional[int] = None,
+        is_read: Optional[int] = None,
+    ) -> List[Notification]:
         """Get notifications for a single device using a custom date range.
 
         Args:
@@ -269,7 +314,7 @@ class PajGpsApi(PajGpsRequests):
             count: Optional. Number of notifications to return (default 50).
             is_read: Optional. 0 for unread, 1 for read.
         """
-        params = {
+        params: Dict[str, Any] = {
             "startDate": start_date,
             "endDate": end_date
         }
@@ -288,7 +333,12 @@ class PajGpsApi(PajGpsRequests):
             return success_data
         return data
 
-    def mark_notifications_read_by_device(self, device_id, is_read, alert_type=None):
+    def mark_notifications_read_by_device(
+        self,
+        device_id: int,
+        is_read: int,
+        alert_type: Optional[Union[AlertType, int]] = None,
+    ) -> Any:
         """Mark notifications as read or unread for a single device.
 
         Args:
@@ -296,7 +346,7 @@ class PajGpsApi(PajGpsRequests):
             is_read: Required. 0 for unread, 1 for read.
             alert_type: Optional. Use AlertType constants or an int (1..22).
         """
-        params = {"isRead": is_read}
+        params: Dict[str, Any] = {"isRead": is_read}
         if alert_type is not None:
             params["alertType"] = _normalize_alert_type(alert_type)
 
@@ -305,14 +355,18 @@ class PajGpsApi(PajGpsRequests):
             return data["success"]
         return data
 
-    def mark_notifications_read_by_customer(self, is_read, alert_type=None):
+    def mark_notifications_read_by_customer(
+        self,
+        is_read: int,
+        alert_type: Optional[Union[AlertType, int]] = None,
+    ) -> Any:
         """Mark notifications as read or unread for all devices.
 
         Args:
             is_read: Required. 0 for unread, 1 for read.
             alert_type: Optional. Use AlertType constants or an int (1..22).
         """
-        params = {"isRead": is_read}
+        params: Dict[str, Any] = {"isRead": is_read}
         if alert_type is not None:
             params["alertType"] = _normalize_alert_type(alert_type)
 

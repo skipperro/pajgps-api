@@ -1,28 +1,38 @@
 from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional, Set
+
 import requests
+
 from .pajgps_api_error import AuthenticationError, TokenRefreshError, RequestError
+from .models.auth import AuthResponse
 
 
 class PajGpsRequests(ABC):
     """Low-level HTTP client with retry, timeout, and token management."""
 
-    def __init__(self, email=None, password=None, timeout=5, max_retries=3):
-        self.email = email
-        self.password = password
-        self.session = requests.Session()
-        self.base_url = "https://connect.paj-gps.de/"
-        self.token = None
-        self.refresh_token = None
-        self.user_id = None
+    def __init__(
+        self,
+        email: Optional[str] = None,
+        password: Optional[str] = None,
+        timeout: int = 5,
+        max_retries: int = 3,
+    ) -> None:
+        self.email: Optional[str] = email
+        self.password: Optional[str] = password
+        self.session: requests.Session = requests.Session()
+        self.base_url: str = "https://connect.paj-gps.de/"
+        self.token: Optional[str] = None
+        self.refresh_token: Optional[str] = None
+        self.user_id: Optional[int] = None
         # Retry/timeout configuration
-        self.timeout = timeout  # base timeout in seconds (first attempt)
-        self.max_retries = max_retries  # total number of attempts
+        self.timeout: int = timeout  # base timeout in seconds (first attempt)
+        self.max_retries: int = max_retries  # total number of attempts
         # HTTP status codes that should trigger a retry
-        self._retry_statuses = {500, 502, 503, 504, 429}
+        self._retry_statuses: Set[int] = {500, 502, 503, 504, 429}
 
-    def _get_headers(self):
+    def _get_headers(self) -> Dict[str, str]:
         """Get headers for API requests."""
-        headers = {
+        headers: Dict[str, str] = {
             "Accept": "application/json",
         }
         if self.token:
@@ -30,16 +40,23 @@ class PajGpsRequests(ABC):
         return headers
 
     @abstractmethod
-    def login(self, email=None, password=None):
+    def login(self, email: Optional[str] = None, password: Optional[str] = None) -> AuthResponse:
         """Log in to the API and get a token."""
         pass
 
     @abstractmethod
-    def update_token(self):
+    def update_token(self) -> AuthResponse:
         """Refresh the access token using the refresh token."""
         pass
 
-    def _execute_request(self, method, url, headers=None, refresh_on_401=True, **kwargs):
+    def _execute_request(
+        self,
+        method: str,
+        url: str,
+        headers: Optional[Dict[str, str]] = None,
+        refresh_on_401: bool = True,
+        **kwargs: Any,
+    ) -> requests.Response:
         """
         Execute an HTTP request with retry and incremental timeout logic.
         - First attempt uses `self.timeout` seconds, each next attempt adds `self.timeout` seconds.
@@ -50,11 +67,11 @@ class PajGpsRequests(ABC):
         """
         headers = headers or {}
         # Pop timeout from kwargs if present to avoid multiple values for argument in self.session.request
-        timeout_override = kwargs.pop("timeout", None)
+        timeout_override: Optional[int] = kwargs.pop("timeout", None)
 
-        last_exception = None
+        last_exception: Optional[Exception] = None
         for attempt in range(1, self.max_retries + 1):
-            current_timeout = timeout_override or (self.timeout * attempt)
+            current_timeout: int = timeout_override or (self.timeout * attempt)
             try:
                 resp = self.session.request(method, url, headers=headers, timeout=current_timeout, **kwargs)
 
@@ -102,7 +119,7 @@ class PajGpsRequests(ABC):
         # Fallback (shouldn't happen): raise HTTPError
         raise requests.exceptions.RequestException("Request failed after retries")
 
-    def _request(self, method, endpoint, **kwargs):
+    def _request(self, method: str, endpoint: str, **kwargs: Any) -> Dict[str, Any]:
         """Internal method to handle API requests."""
         if not self.token:
             if self.email and self.password:
@@ -110,8 +127,8 @@ class PajGpsRequests(ABC):
             else:
                 raise AuthenticationError("Not authenticated. Please call login() first.")
 
-        url = f"{self.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
-        headers = kwargs.pop("headers", {})
+        url: str = f"{self.base_url.rstrip('/')}/{endpoint.lstrip('/')}"
+        headers: Dict[str, str] = kwargs.pop("headers", {})
         headers.update(self._get_headers())
 
         try:
