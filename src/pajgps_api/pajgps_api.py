@@ -1,7 +1,15 @@
+from typing import Optional, Union, Any
 import requests
+from .alert_types import AlertType
 from .pajgps_requests import PajGpsRequests
 from .pajgps_api_error import AuthenticationError, TokenRefreshError
 from .models import Device, TrackPoint, SensorData, AuthResponse, Notification
+
+
+def _normalize_alert_type(alert_type: Union[AlertType, int]) -> int:
+    if isinstance(alert_type, AlertType):
+        return int(alert_type)
+    return alert_type
 
 
 class PajGpsApi(PajGpsRequests):
@@ -9,7 +17,7 @@ class PajGpsApi(PajGpsRequests):
 
     # ── Authentication endpoints ──────────────────────────────────────
 
-    def login(self, email=None, password=None):
+    def login(self, email: Optional[str] = None, password: Optional[str] = None) -> AuthResponse:
         """Log in to the API and get a token."""
         email = email or self.email
         password = password or self.password
@@ -40,7 +48,7 @@ class PajGpsApi(PajGpsRequests):
         except requests.exceptions.RequestException as e:
             raise AuthenticationError(f"Request failed: {str(e)}")
 
-    def update_token(self):
+    def update_token(self) -> AuthResponse:
         """Refresh the access token using the refresh token."""
         if not self.email or not self.refresh_token:
             raise TokenRefreshError("Email and refresh token are required to refresh the token.")
@@ -211,12 +219,12 @@ class PajGpsApi(PajGpsRequests):
         """Get notifications for all devices.
 
         Args:
-            alert_type: Optional. Alert type range from 1 to 22.
+            alert_type: Optional. Use AlertType constants or an int (1..22).
             is_read: Optional. 0 for unread, 1 for read.
         """
         params = {}
         if alert_type is not None:
-            params["alertType"] = alert_type
+            params["alertType"] = _normalize_alert_type(alert_type)
         if is_read is not None:
             params["isRead"] = is_read
 
@@ -233,12 +241,12 @@ class PajGpsApi(PajGpsRequests):
 
         Args:
             device_id: The device ID.
-            alert_type: Optional. Alert type range from 1 to 22.
+            alert_type: Optional. Use AlertType constants or an int (1..22).
             is_read: Optional. 0 for unread, 1 for read.
         """
         params = {}
         if alert_type is not None:
-            params["alertType"] = alert_type
+            params["alertType"] = _normalize_alert_type(alert_type)
         if is_read is not None:
             params["isRead"] = is_read
 
@@ -257,7 +265,7 @@ class PajGpsApi(PajGpsRequests):
             device_id: The device ID.
             start_date: Start date as a unix timestamp.
             end_date: End date as a unix timestamp.
-            alert_type: Optional. Alert type range from 1 to 22.
+            alert_type: Optional. Use AlertType constants or an int (1..22).
             count: Optional. Number of notifications to return (default 50).
             is_read: Optional. 0 for unread, 1 for read.
         """
@@ -266,7 +274,7 @@ class PajGpsApi(PajGpsRequests):
             "endDate": end_date
         }
         if alert_type is not None:
-            params["alertType"] = alert_type
+            params["alertType"] = _normalize_alert_type(alert_type)
         if count is not None:
             params["noOfNotification"] = count
         if is_read is not None:
@@ -286,11 +294,11 @@ class PajGpsApi(PajGpsRequests):
         Args:
             device_id: The device ID.
             is_read: Required. 0 for unread, 1 for read.
-            alert_type: Optional. Alert type range from 1 to 22.
+            alert_type: Optional. Use AlertType constants or an int (1..22).
         """
         params = {"isRead": is_read}
         if alert_type is not None:
-            params["alertType"] = alert_type
+            params["alertType"] = _normalize_alert_type(alert_type)
 
         data = self._request("PUT", f"api/v1/notifications/markReadByDevice/{device_id}", params=params)
         if "success" in data:
@@ -302,11 +310,11 @@ class PajGpsApi(PajGpsRequests):
 
         Args:
             is_read: Required. 0 for unread, 1 for read.
-            alert_type: Optional. Alert type range from 1 to 22.
+            alert_type: Optional. Use AlertType constants or an int (1..22).
         """
         params = {"isRead": is_read}
         if alert_type is not None:
-            params["alertType"] = alert_type
+            params["alertType"] = _normalize_alert_type(alert_type)
 
         data = self._request("PUT", "api/v1/notifications/markReadByCustomer", params=params)
         if "success" in data:
