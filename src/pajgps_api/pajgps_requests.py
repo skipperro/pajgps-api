@@ -62,7 +62,13 @@ class PajGpsRequests(ABC):
                 if resp.status_code == 401 and refresh_on_401:
                     try:
                         if self.refresh_token:
-                            self.update_token()
+                            try:
+                                self.update_token()
+                            except TokenRefreshError:
+                                if self.email and self.password:
+                                    self.login()
+                                else:
+                                    raise
                         elif self.email and self.password:
                             self.login()
                         else:
