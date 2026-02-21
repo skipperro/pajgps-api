@@ -1,7 +1,12 @@
+import unittest
 from pajgps_api import PajGpsApi
 
-def test_api_init():
-    api = PajGpsApi("test@example.com", "password")
-    assert api.email == "test@example.com"
-    assert api.password == "password"
-    assert api.base_url == "https://v2-api.paj-gps.de/api"
+class TestApiInit(unittest.TestCase):
+    def test_api_init(self):
+        api = PajGpsApi("test@example.com", "password")
+        self.assertEqual(api.email, "test@example.com")
+        self.assertEqual(api.password, "password")
+        self.assertEqual(api.base_url, "https://connect.paj-gps.de/")
+
+if __name__ == '__main__':
+    unittest.main()

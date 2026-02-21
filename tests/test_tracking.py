@@ -4,7 +4,7 @@ import time
 from unittest.mock import patch, MagicMock
 from dotenv import load_dotenv
 from pajgps_api.pajgps_api import PajGpsApi
-from pajgps_api.exceptions import RequestError
+from pajgps_api.pajgps_api_error import RequestError
 from pajgps_api.models import TrackPoint, SensorData
 
 # Load environment variables from src/.env

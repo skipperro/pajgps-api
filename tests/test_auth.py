@@ -3,8 +3,9 @@ import os
 from unittest.mock import patch, MagicMock
 from dotenv import load_dotenv
 import requests
-from pajgps_api.api import PajGpsApi
-from pajgps_api.exceptions import AuthenticationError, TokenRefreshError
+from pajgps_api.pajgps_api import PajGpsApi
+from pajgps_api.pajgps_api_error import AuthenticationError, TokenRefreshError
+from pajgps_api.models import AuthResponse
 
 # Load environment variables from src/.env
 dotenv_path = os.path.join(os.path.dirname(__file__), '..', 'src', '.env')
@@ -31,7 +32,8 @@ class TestAuth(unittest.TestCase):
 
         result = self.api.login()
 
-        self.assertEqual(result["token"], "valid_token")
+        self.assertIsInstance(result, AuthResponse)
+        self.assertEqual(result.token, "valid_token")
         self.assertEqual(self.api.token, "valid_token")
         self.assertEqual(self.api.refresh_token, "valid_refresh_token")
         self.assertEqual(self.api.user_id, 123)
@@ -67,7 +69,8 @@ class TestAuth(unittest.TestCase):
 
         result = self.api.update_token()
 
-        self.assertEqual(result["token"], "new_token")
+        self.assertIsInstance(result, AuthResponse)
+        self.assertEqual(result.token, "new_token")
         self.assertEqual(self.api.token, "new_token")
         self.assertEqual(self.api.refresh_token, "new_refresh_token")
 
@@ -85,7 +88,7 @@ class TestAuth(unittest.TestCase):
             self.api.update_token()
 
     @patch('requests.Session.request')
-    @patch('pajgps_api.api.PajGpsApi.update_token')
+    @patch('pajgps_api.pajgps_api.PajGpsApi.update_token')
     def test_request_with_token_refresh(self, mock_update_token, mock_request):
         self.api.token = "expired_token"
         self.api.refresh_token = "valid_refresh_token"
@@ -192,12 +195,13 @@ class TestAuthIntegration(unittest.TestCase):
         """Perform a real login using credentials from .env."""
         try:
             result = self.api.login()
-            self.assertIn("token", result)
-            self.assertIn("refresh_token", result)
-            self.assertIn("userID", result)
+            self.assertIsInstance(result, AuthResponse)
+            self.assertTrue(hasattr(result, "token"))
+            self.assertTrue(hasattr(result, "refresh_token"))
+            self.assertTrue(hasattr(result, "userID"))
             self.assertIsNotNone(self.api.token)
             self.assertIsNotNone(self.api.refresh_token)
-            print(f"\nLogin successful for user ID: {result['userID']}")
+            print(f"\nLogin successful for user ID: {result.userID}")
         except AuthenticationError as e:
             self.fail(f"Real login failed: {str(e)}")
 
@@ -213,8 +217,9 @@ class TestAuthIntegration(unittest.TestCase):
         # Then refresh token
         try:
             result = self.api.update_token()
-            self.assertIn("token", result)
-            self.assertIn("refresh_token", result)
+            self.assertIsInstance(result, AuthResponse)
+            self.assertTrue(hasattr(result, "token"))
+            self.assertTrue(hasattr(result, "refresh_token"))
             self.assertIsNotNone(self.api.token)
             self.assertIsNotNone(self.api.refresh_token)
             print("\nToken refresh successful")

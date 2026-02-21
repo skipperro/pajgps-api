@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import requests
-from pajgps_api.api import PajGpsApi
-from pajgps_api.exceptions import RequestError
+from pajgps_api.pajgps_api import PajGpsApi
+from pajgps_api.pajgps_api_error import RequestError
 
 class TestRetryLogic(unittest.TestCase):
     def setUp(self):

@@ -2,8 +2,9 @@ import unittest
 import os
 from unittest.mock import patch, MagicMock
 from dotenv import load_dotenv
-from pajgps_api.api import PajGpsApi
-from pajgps_api.exceptions import AuthenticationError, RequestError
+from pajgps_api.pajgps_api import PajGpsApi
+from pajgps_api.pajgps_api_error import AuthenticationError, RequestError
+from pajgps_api.models import Device
 
 # Load environment variables from src/.env
 dotenv_path = os.path.join(os.path.dirname(__file__), '..', 'src', '.env')
@@ -34,8 +35,9 @@ class TestGetDevices(unittest.TestCase):
 
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 2)
-        self.assertEqual(result[0]["name"], "Tracker A")
-        self.assertEqual(result[1]["id"], 2)
+        self.assertIsInstance(result[0], Device)
+        self.assertEqual(result[0].name, "Tracker A")
+        self.assertEqual(result[1].id, 2)
 
     @patch('requests.Session.request')
     def test_get_devices_empty(self, mock_request):
@@ -75,9 +77,9 @@ class TestGetDevice(unittest.TestCase):
 
         result = self.api.get_device(42)
 
-        self.assertIsInstance(result, dict)
-        self.assertEqual(result["id"], 42)
-        self.assertEqual(result["name"], "My GPS Tracker")
+        self.assertIsInstance(result, Device)
+        self.assertEqual(result.id, 42)
+        self.assertEqual(result.name, "My GPS Tracker")
         # Verify correct URL was called
         call_url = mock_request.call_args[0][1]
         self.assertIn("/api/v1/device/42", call_url)
@@ -116,8 +118,8 @@ class TestUpdateDevice(unittest.TestCase):
 
         result = self.api.update_device(42, name="Renamed Tracker")
 
-        self.assertIsInstance(result, dict)
-        self.assertEqual(result["name"], "Renamed Tracker")
+        self.assertIsInstance(result, Device)
+        self.assertEqual(result.name, "Renamed Tracker")
         # Verify PUT method and URL
         call_args = mock_request.call_args
         self.assertEqual(call_args[0][0], "PUT")
@@ -141,8 +143,8 @@ class TestUpdateDevice(unittest.TestCase):
 
         result = self.api.update_device(42, name="Updated", spurfarbe="#FF0000", alarmintervall=60)
 
-        self.assertEqual(result["spurfarbe"], "#FF0000")
-        self.assertEqual(result["alarmintervall"], 60)
+        self.assertEqual(result.spurfarbe, "#FF0000")
+        self.assertEqual(result.alarmintervall, 60)
         call_json = mock_request.call_args[1]["json"]
         self.assertEqual(call_json, {"name": "Updated", "spurfarbe": "#FF0000", "alarmintervall": 60})
 
@@ -173,12 +175,13 @@ class TestDeviceIntegration(unittest.TestCase):
 
         self.assertIsInstance(devices, list)
         self.assertGreater(len(devices), 0, "Expected at least one device")
-        # Each device should have basic fields
+        # Each device should be a Device object
         first = devices[0]
-        self.assertIn("id", first)
-        self.assertIn("name", first)
-        self.assertIn("imei", first)
-        print(f"\nFound {len(devices)} device(s). First: id={first['id']}, name={first['name']}")
+        self.assertIsInstance(first, Device)
+        self.assertTrue(hasattr(first, "id"))
+        self.assertTrue(hasattr(first, "name"))
+        self.assertTrue(hasattr(first, "imei"))
+        print(f"\nFound {len(devices)} device(s). First: id={first.id}, name={first.name}")
 
     @unittest.skipIf(not os.getenv("PAJGPS_EMAIL") or not os.getenv("PAJGPS_PASSWORD"), "Credentials not found in .env")
     def test_real_get_device_by_id(self):
@@ -187,14 +190,14 @@ class TestDeviceIntegration(unittest.TestCase):
         devices = self.api.get_devices()
         self.assertGreater(len(devices), 0, "Need at least one device to test get_device")
 
-        device_id = devices[0]["id"]
+        device_id = devices[0].id
         device = self.api.get_device(device_id)
 
-        self.assertIsInstance(device, dict)
-        self.assertEqual(device["id"], device_id)
-        self.assertIn("name", device)
-        self.assertIn("imei", device)
-        print(f"\nDevice {device_id}: name={device['name']}, imei={device['imei']}")
+        self.assertIsInstance(device, Device)
+        self.assertEqual(device.id, device_id)
+        self.assertTrue(hasattr(device, "name"))
+        self.assertTrue(hasattr(device, "imei"))
+        print(f"\nDevice {device_id}: name={device.name}, imei={device.imei}")
 
 
 if __name__ == '__main__':

@@ -1,8 +1,9 @@
+from abc import ABC, abstractmethod
 import requests
-from .exceptions import AuthenticationError, TokenRefreshError, RequestError
+from .pajgps_api_error import AuthenticationError, TokenRefreshError, RequestError
 
 
-class PajGpsRequests:
+class PajGpsRequests(ABC):
     """Low-level HTTP client with retry, timeout, and token management."""
 
     def __init__(self, email=None, password=None, timeout=5, max_retries=3):
@@ -28,6 +29,16 @@ class PajGpsRequests:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
 
+    @abstractmethod
+    def login(self, email=None, password=None):
+        """Log in to the API and get a token."""
+        pass
+
+    @abstractmethod
+    def update_token(self):
+        """Refresh the access token using the refresh token."""
+        pass
+
     def _execute_request(self, method, url, headers=None, refresh_on_401=True, **kwargs):
         """
         Execute an HTTP request with retry and incremental timeout logic.
@@ -38,10 +49,12 @@ class PajGpsRequests:
         Raises: requests.exceptions.RequestException on final failure
         """
         headers = headers or {}
+        # Pop timeout from kwargs if present to avoid multiple values for argument in self.session.request
+        timeout_override = kwargs.pop("timeout", None)
 
         last_exception = None
         for attempt in range(1, self.max_retries + 1):
-            current_timeout = kwargs.get("timeout", self.timeout * attempt)
+            current_timeout = timeout_override or (self.timeout * attempt)
             try:
                 resp = self.session.request(method, url, headers=headers, timeout=current_timeout, **kwargs)
 
@@ -77,7 +90,7 @@ class PajGpsRequests:
                     raise e
                 continue
 
-        # If loop exits without return, raise last exception or generic error
+        # If the loop exits without a return, raise the last exception or generic error
         if last_exception:
             raise last_exception
         # Fallback (shouldn't happen): raise HTTPError
