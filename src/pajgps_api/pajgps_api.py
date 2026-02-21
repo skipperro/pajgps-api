@@ -1,10 +1,10 @@
 from typing import Any, Dict, List, Optional, Union
 
-import requests
+import aiohttp
 
 from .alert_types import AlertType
 from .pajgps_requests import PajGpsRequests
-from .pajgps_api_error import AuthenticationError, TokenRefreshError
+from .pajgps_api_error import AuthenticationError, TokenRefreshError, PajGpsApiError
 from .models import Device, TrackPoint, SensorData, AuthResponse, Notification
 
 
@@ -15,11 +15,11 @@ def _normalize_alert_type(alert_type: Union[AlertType, int]) -> int:
 
 
 class PajGpsApi(PajGpsRequests):
-    """Class to handle communication with the PAJ GPS API."""
+    """Async class to handle communication with the PAJ GPS API."""
 
     # ── Authentication endpoints ──────────────────────────────────────
 
-    def login(self, email: Optional[str] = None, password: Optional[str] = None) -> AuthResponse:
+    async def login(self, email: Optional[str] = None, password: Optional[str] = None) -> AuthResponse:
         """Log in to the API and get a token."""
         email = email or self.email
         password = password or self.password
@@ -31,11 +31,11 @@ class PajGpsApi(PajGpsRequests):
             "email": email,
             "password": password
         }
-        
+
         url: str = f"{self.base_url.rstrip('/')}/api/v1/login"
         try:
-            response = self._execute_request("POST", url, params=params, refresh_on_401=False)
-            data: Dict[str, Any] = response.json()
+            response = await self._execute_request("POST", url, params=params, refresh_on_401=False)
+            data: Dict[str, Any] = await response.json()
 
             if "success" in data:
                 self.token = data["success"]["token"]
@@ -46,11 +46,11 @@ class PajGpsApi(PajGpsRequests):
                 return AuthResponse(**data["success"])
             else:
                 raise AuthenticationError(f"Login failed: {data.get('error', 'Unknown error')}")
-                
-        except requests.exceptions.RequestException as e:
+
+        except aiohttp.ClientError as e:
             raise AuthenticationError(f"Request failed: {str(e)}")
 
-    def update_token(self) -> AuthResponse:
+    async def update_token(self) -> AuthResponse:
         """Refresh the access token using the refresh token."""
         if not self.email or not self.refresh_token:
             raise TokenRefreshError("Email and refresh token are required to refresh the token.")
@@ -59,11 +59,11 @@ class PajGpsApi(PajGpsRequests):
             "email": self.email,
             "refresh_token": self.refresh_token
         }
-        
+
         url: str = f"{self.base_url.rstrip('/')}/api/v1/updatetoken"
         try:
-            response = self._execute_request("POST", url, params=params, refresh_on_401=False)
-            data: Dict[str, Any] = response.json()
+            response = await self._execute_request("POST", url, params=params, refresh_on_401=False)
+            data: Dict[str, Any] = await response.json()
 
             if "success" in data:
                 self.token = data["success"]["token"]
@@ -71,45 +71,45 @@ class PajGpsApi(PajGpsRequests):
                 return AuthResponse(**data["success"])
             else:
                 raise TokenRefreshError(f"Token refresh failed: {data.get('error', 'Unknown error')}")
-                
-        except requests.exceptions.RequestException as e:
+
+        except aiohttp.ClientError as e:
             raise TokenRefreshError(f"Request failed: {str(e)}")
 
     # ── Device endpoints ──────────────────────────────────────────────
 
-    def get_devices(self) -> List[Device]:
+    async def get_devices(self) -> List[Device]:
         """Get data for all devices the user has permission to view."""
-        data: Dict[str, Any] = self._request("GET", "api/v1/device")
-        if "success" in data:
-            success_data = data["success"]
-            if isinstance(success_data, list):
-                return [Device(**item) for item in success_data]
-            return success_data
-        return data
+        data: Dict[str, Any] = await self._request("GET", "api/v1/device")
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        success_data = data["success"]
+        if isinstance(success_data, list):
+            return [Device(**item) for item in success_data]
+        raise PajGpsApiError(f"Unexpected response format: {success_data}")
 
-    def get_device(self, device_id: int) -> Device:
+    async def get_device(self, device_id: int) -> Device:
         """Get data for a single device by its ID."""
-        data: Dict[str, Any] = self._request("GET", f"api/v1/device/{device_id}")
-        if "success" in data:
-            success_data = data["success"]
-            if isinstance(success_data, dict):
-                return Device(**success_data)
-            return success_data
-        return data
+        data: Dict[str, Any] = await self._request("GET", f"api/v1/device/{device_id}")
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        success_data = data["success"]
+        if isinstance(success_data, dict):
+            return Device(**success_data)
+        raise PajGpsApiError(f"Unexpected response format: {success_data}")
 
-    def update_device(self, device_id: int, **kwargs: Any) -> Device:
+    async def update_device(self, device_id: int, **kwargs: Any) -> Device:
         """Update a device by its ID. Pass device fields as keyword arguments."""
-        data: Dict[str, Any] = self._request("PUT", f"api/v1/device/{device_id}", json=kwargs)
-        if "success" in data:
-            success_data = data["success"]
-            if isinstance(success_data, dict):
-                return Device(**success_data)
-            return success_data
-        return data
+        data: Dict[str, Any] = await self._request("PUT", f"api/v1/device/{device_id}", json=kwargs)
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        success_data = data["success"]
+        if isinstance(success_data, dict):
+            return Device(**success_data)
+        raise PajGpsApiError(f"Unexpected response format: {success_data}")
 
     # ── Tracking Data endpoints ───────────────────────────────────────
 
-    def get_tracking_data_last_minutes(
+    async def get_tracking_data_last_minutes(
         self,
         device_id: int,
         last_minutes: int,
@@ -133,15 +133,15 @@ class PajGpsApi(PajGpsRequests):
             params["wifi"] = wifi
         if sort is not None:
             params["sort"] = sort
-        data = self._request("GET", f"api/v1/trackerdata/{device_id}/last_minutes", params=params)
-        if "success" in data:
-            success_data = data["success"]
-            if isinstance(success_data, list):
-                return [TrackPoint(**item) for item in success_data]
-            return success_data
-        return data
+        data = await self._request("GET", f"api/v1/trackerdata/{device_id}/last_minutes", params=params)
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        success_data = data["success"]
+        if isinstance(success_data, list):
+            return [TrackPoint(**item) for item in success_data]
+        raise PajGpsApiError(f"Unexpected response format: {success_data}")
 
-    def get_tracking_data_last_points(
+    async def get_tracking_data_last_points(
         self,
         device_id: int,
         last_points: int,
@@ -165,15 +165,15 @@ class PajGpsApi(PajGpsRequests):
             params["wifi"] = wifi
         if sort is not None:
             params["sort"] = sort
-        data = self._request("GET", f"api/v1/trackerdata/{device_id}/last_points", params=params)
-        if "success" in data:
-            success_data = data["success"]
-            if isinstance(success_data, list):
-                return [TrackPoint(**item) for item in success_data]
-            return success_data
-        return data
+        data = await self._request("GET", f"api/v1/trackerdata/{device_id}/last_points", params=params)
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        success_data = data["success"]
+        if isinstance(success_data, list):
+            return [TrackPoint(**item) for item in success_data]
+        raise PajGpsApiError(f"Unexpected response format: {success_data}")
 
-    def get_tracking_data_date_range(
+    async def get_tracking_data_date_range(
         self,
         device_id: int,
         date_start: int,
@@ -199,15 +199,15 @@ class PajGpsApi(PajGpsRequests):
             params["wifi"] = wifi
         if sort is not None:
             params["sort"] = sort
-        data = self._request("GET", f"api/v1/trackerdata/{device_id}/date_range", params=params)
-        if "success" in data:
-            success_data = data["success"]
-            if isinstance(success_data, list):
-                return [TrackPoint(**item) for item in success_data]
-            return success_data
-        return data
+        data = await self._request("GET", f"api/v1/trackerdata/{device_id}/date_range", params=params)
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        success_data = data["success"]
+        if isinstance(success_data, list):
+            return [TrackPoint(**item) for item in success_data]
+        raise PajGpsApiError(f"Unexpected response format: {success_data}")
 
-    def get_all_last_positions(
+    async def get_all_last_positions(
         self,
         device_ids: List[int],
         from_last_point: bool = False,
@@ -219,31 +219,31 @@ class PajGpsApi(PajGpsRequests):
             from_last_point: If True, returns all points from the last known dateunix.
         """
         body: Dict[str, Any] = {"deviceIDs": device_ids, "fromLastPoint": from_last_point}
-        data = self._request("POST", "api/v1/trackerdata/getalllastpositions", json=body)
-        if "success" in data:
-            success_data = data["success"]
-            if isinstance(success_data, list):
-                return [TrackPoint(**item) for item in success_data]
-            return success_data
-        return data
+        data = await self._request("POST", "api/v1/trackerdata/getalllastpositions", json=body)
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        success_data = data["success"]
+        if isinstance(success_data, list):
+            return [TrackPoint(**item) for item in success_data]
+        raise PajGpsApiError(f"Unexpected response format: {success_data}")
 
-    def get_last_sensor_data(self, device_id: int) -> SensorData:
+    async def get_last_sensor_data(self, device_id: int) -> SensorData:
         """Get last sensor (voltage) data for a device.
 
         Args:
             device_id: The device ID.
         """
-        data: Dict[str, Any] = self._request("GET", f"api/v1/sensordata/last/{device_id}")
-        if "success" in data:
-            success_data = data["success"]
-            if isinstance(success_data, dict):
-                return SensorData(**success_data)
-            return success_data
-        return data
+        data: Dict[str, Any] = await self._request("GET", f"api/v1/sensordata/last/{device_id}")
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        success_data = data["success"]
+        if isinstance(success_data, dict):
+            return SensorData(**success_data)
+        raise PajGpsApiError(f"Unexpected response format: {success_data}")
 
     # ── Notification endpoints ────────────────────────────────────────
 
-    def get_notifications(
+    async def get_notifications(
         self,
         alert_type: Optional[Union[AlertType, int]] = None,
         is_read: Optional[int] = None,
@@ -260,15 +260,15 @@ class PajGpsApi(PajGpsRequests):
         if is_read is not None:
             params["isRead"] = is_read
 
-        data = self._request("GET", "api/v1/notifications", params=params)
-        if "success" in data:
-            success_data = data["success"]
-            if isinstance(success_data, list):
-                return [Notification(**item) for item in success_data]
-            return success_data
-        return data
+        data = await self._request("GET", "api/v1/notifications", params=params)
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        success_data = data["success"]
+        if isinstance(success_data, list):
+            return [Notification(**item) for item in success_data]
+        raise PajGpsApiError(f"Unexpected response format: {success_data}")
 
-    def get_device_notifications(
+    async def get_device_notifications(
         self,
         device_id: int,
         alert_type: Optional[Union[AlertType, int]] = None,
@@ -287,15 +287,15 @@ class PajGpsApi(PajGpsRequests):
         if is_read is not None:
             params["isRead"] = is_read
 
-        data = self._request("GET", f"api/v1/notifications/{device_id}", params=params)
-        if "success" in data:
-            success_data = data["success"]
-            if isinstance(success_data, list):
-                return [Notification(**item) for item in success_data]
-            return success_data
-        return data
+        data = await self._request("GET", f"api/v1/notifications/{device_id}", params=params)
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        success_data = data["success"]
+        if isinstance(success_data, list):
+            return [Notification(**item) for item in success_data]
+        raise PajGpsApiError(f"Unexpected response format: {success_data}")
 
-    def get_custom_notifications(
+    async def get_custom_notifications(
         self,
         device_id: int,
         start_date: int,
@@ -325,15 +325,15 @@ class PajGpsApi(PajGpsRequests):
         if is_read is not None:
             params["isRead"] = is_read
 
-        data = self._request("GET", f"api/v1/customnotifications/{device_id}", params=params)
-        if "success" in data:
-            success_data = data["success"]
-            if isinstance(success_data, list):
-                return [Notification(**item) for item in success_data]
-            return success_data
-        return data
+        data = await self._request("GET", f"api/v1/customnotifications/{device_id}", params=params)
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        success_data = data["success"]
+        if isinstance(success_data, list):
+            return [Notification(**item) for item in success_data]
+        raise PajGpsApiError(f"Unexpected response format: {success_data}")
 
-    def mark_notifications_read_by_device(
+    async def mark_notifications_read_by_device(
         self,
         device_id: int,
         is_read: int,
@@ -350,12 +350,12 @@ class PajGpsApi(PajGpsRequests):
         if alert_type is not None:
             params["alertType"] = _normalize_alert_type(alert_type)
 
-        data = self._request("PUT", f"api/v1/notifications/markReadByDevice/{device_id}", params=params)
-        if "success" in data:
-            return data["success"]
-        return data
+        data = await self._request("PUT", f"api/v1/notifications/markReadByDevice/{device_id}", params=params)
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        return data["success"]
 
-    def mark_notifications_read_by_customer(
+    async def mark_notifications_read_by_customer(
         self,
         is_read: int,
         alert_type: Optional[Union[AlertType, int]] = None,
@@ -370,7 +370,7 @@ class PajGpsApi(PajGpsRequests):
         if alert_type is not None:
             params["alertType"] = _normalize_alert_type(alert_type)
 
-        data = self._request("PUT", "api/v1/notifications/markReadByCustomer", params=params)
-        if "success" in data:
-            return data["success"]
-        return data
+        data = await self._request("PUT", "api/v1/notifications/markReadByCustomer", params=params)
+        if "success" not in data:
+            raise PajGpsApiError(f"Unexpected response: {data}")
+        return data["success"]

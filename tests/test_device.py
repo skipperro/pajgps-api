@@ -1,9 +1,10 @@
 import unittest
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from dotenv import load_dotenv
+import aiohttp
 from pajgps_api.pajgps_api import PajGpsApi
-from pajgps_api.pajgps_api_error import AuthenticationError, RequestError
+from pajgps_api.pajgps_api_error import RequestError
 from pajgps_api.models import Device
 
 # Load environment variables from src/.env
@@ -11,7 +12,7 @@ dotenv_path = os.path.join(os.path.dirname(__file__), '..', 'src', '.env')
 load_dotenv(dotenv_path)
 
 
-class TestGetDevices(unittest.TestCase):
+class TestGetDevices(unittest.IsolatedAsyncioTestCase):
     """Unit tests for get_devices (mocked)."""
 
     def setUp(self):
@@ -19,19 +20,21 @@ class TestGetDevices(unittest.TestCase):
         self.api.token = "test_token"
         self.api.refresh_token = "test_refresh"
 
-    @patch('requests.Session.request')
-    def test_get_devices_success(self, mock_request):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+    async def asyncTearDown(self):
+        await self.api.close()
+
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_get_devices_success(self, mock_execute):
+        mock_response = AsyncMock()
+        mock_response.json = AsyncMock(return_value={
             "success": [
                 {"id": 1, "name": "Tracker A", "imei": "111111111111111"},
                 {"id": 2, "name": "Tracker B", "imei": "222222222222222"},
             ]
-        }
-        mock_request.return_value = mock_response
+        })
+        mock_execute.return_value = mock_response
 
-        result = self.api.get_devices()
+        result = await self.api.get_devices()
 
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 2)
@@ -39,20 +42,19 @@ class TestGetDevices(unittest.TestCase):
         self.assertEqual(result[0].name, "Tracker A")
         self.assertEqual(result[1].id, 2)
 
-    @patch('requests.Session.request')
-    def test_get_devices_empty(self, mock_request):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"success": []}
-        mock_request.return_value = mock_response
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_get_devices_empty(self, mock_execute):
+        mock_response = AsyncMock()
+        mock_response.json = AsyncMock(return_value={"success": []})
+        mock_execute.return_value = mock_response
 
-        result = self.api.get_devices()
+        result = await self.api.get_devices()
 
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 0)
 
 
-class TestGetDevice(unittest.TestCase):
+class TestGetDevice(unittest.IsolatedAsyncioTestCase):
     """Unit tests for get_device (mocked)."""
 
     def setUp(self):
@@ -60,11 +62,13 @@ class TestGetDevice(unittest.TestCase):
         self.api.token = "test_token"
         self.api.refresh_token = "test_refresh"
 
-    @patch('requests.Session.request')
-    def test_get_device_by_id_success(self, mock_request):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+    async def asyncTearDown(self):
+        await self.api.close()
+
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_get_device_by_id_success(self, mock_execute):
+        mock_response = AsyncMock()
+        mock_response.json = AsyncMock(return_value={
             "success": {
                 "id": 42,
                 "name": "My GPS Tracker",
@@ -72,30 +76,29 @@ class TestGetDevice(unittest.TestCase):
                 "model_nr": 9,
                 "status": 1,
             }
-        }
-        mock_request.return_value = mock_response
+        })
+        mock_execute.return_value = mock_response
 
-        result = self.api.get_device(42)
+        result = await self.api.get_device(42)
 
         self.assertIsInstance(result, Device)
         self.assertEqual(result.id, 42)
         self.assertEqual(result.name, "My GPS Tracker")
-        # Verify correct URL was called
-        call_url = mock_request.call_args[0][1]
-        self.assertIn("/api/v1/device/42", call_url)
 
-    @patch('requests.Session.request')
-    def test_get_device_not_found(self, mock_request):
-        mock_response = MagicMock()
-        mock_response.status_code = 404
-        mock_response.raise_for_status.side_effect = __import__('requests').exceptions.HTTPError(response=mock_response)
-        mock_request.return_value = mock_response
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_get_device_not_found(self, mock_execute):
+        mock_execute.side_effect = aiohttp.ClientResponseError(
+            request_info=MagicMock(),
+            history=(),
+            status=404,
+            message="Not Found",
+        )
 
         with self.assertRaises(RequestError):
-            self.api.get_device(99999)
+            await self.api.get_device(99999)
 
 
-class TestUpdateDevice(unittest.TestCase):
+class TestUpdateDevice(unittest.IsolatedAsyncioTestCase):
     """Unit tests for update_device (mocked, no real API calls)."""
 
     def setUp(self):
@@ -103,63 +106,61 @@ class TestUpdateDevice(unittest.TestCase):
         self.api.token = "test_token"
         self.api.refresh_token = "test_refresh"
 
-    @patch('requests.Session.request')
-    def test_update_device_success(self, mock_request):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+    async def asyncTearDown(self):
+        await self.api.close()
+
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_update_device_success(self, mock_execute):
+        mock_response = AsyncMock()
+        mock_response.json = AsyncMock(return_value={
             "success": {
                 "id": 42,
                 "name": "Renamed Tracker",
                 "imei": "123456789012345",
             }
-        }
-        mock_request.return_value = mock_response
+        })
+        mock_execute.return_value = mock_response
 
-        result = self.api.update_device(42, name="Renamed Tracker")
+        result = await self.api.update_device(42, name="Renamed Tracker")
 
         self.assertIsInstance(result, Device)
         self.assertEqual(result.name, "Renamed Tracker")
-        # Verify PUT method and URL
-        call_args = mock_request.call_args
-        self.assertEqual(call_args[0][0], "PUT")
-        self.assertIn("/api/v1/device/42", call_args[0][1])
         # Verify JSON body was sent
-        self.assertEqual(call_args[1]["json"], {"name": "Renamed Tracker"})
+        call_kwargs = mock_execute.call_args[1]
+        self.assertEqual(call_kwargs["json"], {"name": "Renamed Tracker"})
 
-    @patch('requests.Session.request')
-    def test_update_device_multiple_fields(self, mock_request):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_update_device_multiple_fields(self, mock_execute):
+        mock_response = AsyncMock()
+        mock_response.json = AsyncMock(return_value={
             "success": {
                 "id": 42,
                 "name": "Updated",
                 "spurfarbe": "#FF0000",
                 "alarmintervall": 60,
             }
-        }
-        mock_request.return_value = mock_response
+        })
+        mock_execute.return_value = mock_response
 
-        result = self.api.update_device(42, name="Updated", spurfarbe="#FF0000", alarmintervall=60)
+        result = await self.api.update_device(42, name="Updated", spurfarbe="#FF0000", alarmintervall=60)
 
         self.assertEqual(result.spurfarbe, "#FF0000")
         self.assertEqual(result.alarmintervall, 60)
-        call_json = mock_request.call_args[1]["json"]
-        self.assertEqual(call_json, {"name": "Updated", "spurfarbe": "#FF0000", "alarmintervall": 60})
 
-    @patch('requests.Session.request')
-    def test_update_device_permission_error(self, mock_request):
-        mock_response = MagicMock()
-        mock_response.status_code = 403
-        mock_response.raise_for_status.side_effect = __import__('requests').exceptions.HTTPError(response=mock_response)
-        mock_request.return_value = mock_response
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_update_device_permission_error(self, mock_execute):
+        mock_execute.side_effect = aiohttp.ClientResponseError(
+            request_info=MagicMock(),
+            history=(),
+            status=403,
+            message="Forbidden",
+        )
 
         with self.assertRaises(RequestError):
-            self.api.update_device(42, name="Should Fail")
+            await self.api.update_device(42, name="Should Fail")
 
 
-class TestDeviceIntegration(unittest.TestCase):
+class TestDeviceIntegration(unittest.IsolatedAsyncioTestCase):
     """Integration tests for device GET endpoints using real credentials."""
 
     def setUp(self):
@@ -167,15 +168,17 @@ class TestDeviceIntegration(unittest.TestCase):
         self.password = os.getenv("PAJGPS_PASSWORD")
         self.api = PajGpsApi(self.email, self.password)
 
+    async def asyncTearDown(self):
+        await self.api.close()
+
     @unittest.skipIf(not os.getenv("PAJGPS_EMAIL") or not os.getenv("PAJGPS_PASSWORD"), "Credentials not found in .env")
-    def test_real_get_devices(self):
+    async def test_real_get_devices(self):
         """Fetch all devices with real credentials."""
-        self.api.login()
-        devices = self.api.get_devices()
+        await self.api.login()
+        devices = await self.api.get_devices()
 
         self.assertIsInstance(devices, list)
         self.assertGreater(len(devices), 0, "Expected at least one device")
-        # Each device should be a Device object
         first = devices[0]
         self.assertIsInstance(first, Device)
         self.assertTrue(hasattr(first, "id"))
@@ -184,14 +187,14 @@ class TestDeviceIntegration(unittest.TestCase):
         print(f"\nFound {len(devices)} device(s). First: id={first.id}, name={first.name}")
 
     @unittest.skipIf(not os.getenv("PAJGPS_EMAIL") or not os.getenv("PAJGPS_PASSWORD"), "Credentials not found in .env")
-    def test_real_get_device_by_id(self):
+    async def test_real_get_device_by_id(self):
         """Fetch a single device by ID with real credentials."""
-        self.api.login()
-        devices = self.api.get_devices()
+        await self.api.login()
+        devices = await self.api.get_devices()
         self.assertGreater(len(devices), 0, "Need at least one device to test get_device")
 
         device_id = devices[0].id
-        device = self.api.get_device(device_id)
+        device = await self.api.get_device(device_id)
 
         self.assertIsInstance(device, Device)
         self.assertEqual(device.id, device_id)

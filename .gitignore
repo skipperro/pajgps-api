@@ -8,3 +8,4 @@ src/pajgps_api/__pycache__/
 src/pajgps_api/models/__pycache__/
 
 tests/__pycache__/
+/dist/
