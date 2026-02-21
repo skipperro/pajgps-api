@@ -1,7 +1,7 @@
 import requests
 from .pajgps_requests import PajGpsRequests
 from .pajgps_api_error import AuthenticationError, TokenRefreshError
-from .models import Device, TrackPoint, SensorData, AuthResponse
+from .models import Device, TrackPoint, SensorData, AuthResponse, Notification
 
 
 class PajGpsApi(PajGpsRequests):
@@ -203,4 +203,112 @@ class PajGpsApi(PajGpsRequests):
             if isinstance(success_data, dict):
                 return SensorData(**success_data)
             return success_data
+        return data
+
+    # ── Notification endpoints ────────────────────────────────────────
+
+    def get_notifications(self, alert_type=None, is_read=None):
+        """Get notifications for all devices.
+
+        Args:
+            alert_type: Optional. Alert type range from 1 to 22.
+            is_read: Optional. 0 for unread, 1 for read.
+        """
+        params = {}
+        if alert_type is not None:
+            params["alertType"] = alert_type
+        if is_read is not None:
+            params["isRead"] = is_read
+
+        data = self._request("GET", "api/v1/notifications", params=params)
+        if "success" in data:
+            success_data = data["success"]
+            if isinstance(success_data, list):
+                return [Notification(**item) for item in success_data]
+            return success_data
+        return data
+
+    def get_device_notifications(self, device_id, alert_type=None, is_read=None):
+        """Get notifications for a single device.
+
+        Args:
+            device_id: The device ID.
+            alert_type: Optional. Alert type range from 1 to 22.
+            is_read: Optional. 0 for unread, 1 for read.
+        """
+        params = {}
+        if alert_type is not None:
+            params["alertType"] = alert_type
+        if is_read is not None:
+            params["isRead"] = is_read
+
+        data = self._request("GET", f"api/v1/notifications/{device_id}", params=params)
+        if "success" in data:
+            success_data = data["success"]
+            if isinstance(success_data, list):
+                return [Notification(**item) for item in success_data]
+            return success_data
+        return data
+
+    def get_custom_notifications(self, device_id, start_date, end_date, alert_type=None, count=None, is_read=None):
+        """Get notifications for a single device using a custom date range.
+
+        Args:
+            device_id: The device ID.
+            start_date: Start date as a unix timestamp.
+            end_date: End date as a unix timestamp.
+            alert_type: Optional. Alert type range from 1 to 22.
+            count: Optional. Number of notifications to return (default 50).
+            is_read: Optional. 0 for unread, 1 for read.
+        """
+        params = {
+            "startDate": start_date,
+            "endDate": end_date
+        }
+        if alert_type is not None:
+            params["alertType"] = alert_type
+        if count is not None:
+            params["noOfNotification"] = count
+        if is_read is not None:
+            params["isRead"] = is_read
+
+        data = self._request("GET", f"api/v1/customnotifications/{device_id}", params=params)
+        if "success" in data:
+            success_data = data["success"]
+            if isinstance(success_data, list):
+                return [Notification(**item) for item in success_data]
+            return success_data
+        return data
+
+    def mark_notifications_read_by_device(self, device_id, is_read, alert_type=None):
+        """Mark notifications as read or unread for a single device.
+
+        Args:
+            device_id: The device ID.
+            is_read: Required. 0 for unread, 1 for read.
+            alert_type: Optional. Alert type range from 1 to 22.
+        """
+        params = {"isRead": is_read}
+        if alert_type is not None:
+            params["alertType"] = alert_type
+
+        data = self._request("PUT", f"api/v1/notifications/markReadByDevice/{device_id}", params=params)
+        if "success" in data:
+            return data["success"]
+        return data
+
+    def mark_notifications_read_by_customer(self, is_read, alert_type=None):
+        """Mark notifications as read or unread for all devices.
+
+        Args:
+            is_read: Required. 0 for unread, 1 for read.
+            alert_type: Optional. Alert type range from 1 to 22.
+        """
+        params = {"isRead": is_read}
+        if alert_type is not None:
+            params["alertType"] = alert_type
+
+        data = self._request("PUT", "api/v1/notifications/markReadByCustomer", params=params)
+        if "success" in data:
+            return data["success"]
         return data
