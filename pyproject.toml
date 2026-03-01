@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pajgps-api"
-version = "0.3.0"
+version = "0.3.1"
 description = "A Python library to interact with the PAJ GPS API."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -28,6 +28,7 @@ Issues = "https://github.com/skipperro/pajgps-api/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pajgps_api"]
+artifacts = ["src/pajgps_api/py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

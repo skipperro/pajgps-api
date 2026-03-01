@@ -16,7 +16,7 @@ from .alert_types import (
 from .pajgps_api import PajGpsApi
 from .pajgps_api_error import PajGpsApiError, AuthenticationError, TokenRefreshError, RequestError
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __all__ = [
     "AlertType",
     "ALERT_TYPE_SHOCK",
