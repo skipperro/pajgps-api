@@ -20,10 +20,12 @@ class PajGpsRequests(ABC):
         timeout: int = 5,
         max_retries: int = 3,
         base_url: Optional[str] = None,
+        websession: Optional[aiohttp.ClientSession] = None,
     ) -> None:
         self.email: Optional[str] = email
         self.password: Optional[str] = password
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: Optional[aiohttp.ClientSession] = websession
+        self._owns_session: bool = websession is None
         self.base_url: str = base_url or self.DEFAULT_BASE_URL
         self.token: Optional[str] = None
         self.refresh_token: Optional[str] = None
@@ -35,16 +37,26 @@ class PajGpsRequests(ABC):
         self._retry_statuses: Set[int] = {500, 502, 503, 504, 429}
 
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create the aiohttp client session."""
+        """Get or create the aiohttp client session.
+
+        If an external websession was provided, it is returned as-is.
+        Otherwise a new session is created and owned by this instance.
+        """
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
+            self._owns_session = True
         return self._session
 
     async def close(self) -> None:
-        """Close the underlying aiohttp session."""
-        if self._session and not self._session.closed:
+        """Close the underlying aiohttp session.
+
+        Only closes the session if it was created internally.
+        External sessions (passed via ``websession``) are not closed
+        because their lifecycle is managed by the caller.
+        """
+        if self._session and not self._session.closed and self._owns_session:
             await self._session.close()
-            self._session = None
+        self._session = None
 
     async def __aenter__(self) -> "PajGpsRequests":
         return self

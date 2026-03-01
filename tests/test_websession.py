@@ -59,7 +59,9 @@ class TestGetSessionWithWebsession(unittest.IsolatedAsyncioTestCase):
     @patch("pajgps_api.pajgps_requests.aiohttp.ClientSession")
     async def test_get_session_creates_session_when_none(self, mock_cls):
         """_get_session should create a new session when none is provided."""
-        new_session = _make_mock_session()
+        new_session = MagicMock()
+        new_session.closed = False
+        new_session.close = AsyncMock()
         mock_cls.return_value = new_session
 
         api = PajGpsApi("test@example.com", "password")
