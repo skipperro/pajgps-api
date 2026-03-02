@@ -195,6 +195,13 @@ class TestSensorDataUnexpectedResponse(unittest.IsolatedAsyncioTestCase):
             await self.api.get_last_sensor_data(42)
 
     @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_success_is_non_empty_list(self, mock_execute):
+        """A non-empty list is also invalid for get_last_sensor_data (expects a dict)."""
+        mock_execute.return_value = _mock_response({"success": [{"id": 1}]})
+        with self.assertRaises(PajGpsApiError):
+            await self.api.get_last_sensor_data(42)
+
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
     async def test_success_is_string(self, mock_execute):
         mock_execute.return_value = _mock_response({"success": "unexpected"})
         with self.assertRaises(PajGpsApiError):

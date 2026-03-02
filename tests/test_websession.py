@@ -130,5 +130,79 @@ class TestRequestUsesWebsession(unittest.IsolatedAsyncioTestCase):
         pass
 
 
+class TestCloseEdgeCases(unittest.IsolatedAsyncioTestCase):
+    """Tests for close() edge-case behaviour."""
+
+    async def test_close_when_session_is_none_does_not_raise(self):
+        """close() when _session is None should complete without error."""
+        api = PajGpsApi("test@example.com", "password")
+        api._session = None
+        await api.close()
+
+    async def test_close_when_session_already_closed_does_not_raise(self):
+        """close() when _session is already closed should not call close() again."""
+        api = PajGpsApi("test@example.com", "password")
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_session.closed = True
+        mock_session.close = AsyncMock()
+        api._session = mock_session
+        api._owns_session = True
+
+        await api.close()
+
+        mock_session.close.assert_not_called()
+
+    async def test_close_sets_session_to_none(self):
+        """close() should set _session to None after closing."""
+        api = PajGpsApi("test@example.com", "password")
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_session.closed = False
+        mock_session.close = AsyncMock()
+        api._session = mock_session
+        api._owns_session = True
+
+        await api.close()
+
+        self.assertIsNone(api._session)
+
+
+class TestContextManager(unittest.IsolatedAsyncioTestCase):
+    """Cover the async context-manager protocol on PajGpsApi."""
+
+    async def test_aenter_returns_self(self):
+        """__aenter__ should return the api instance itself."""
+        api = PajGpsApi("test@example.com", "password")
+        result = await api.__aenter__()
+        self.assertIs(result, api)
+        await api.close()
+
+    async def test_aexit_closes_session(self):
+        """__aexit__ should call close(), setting _session to None."""
+        api = PajGpsApi("test@example.com", "password")
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_session.closed = False
+        mock_session.close = AsyncMock()
+        api._session = mock_session
+        api._owns_session = True
+
+        await api.__aexit__(None, None, None)
+
+        mock_session.close.assert_called_once()
+        self.assertIsNone(api._session)
+
+    async def test_async_context_manager_usage(self):
+        """Using 'async with' syntax should work correctly."""
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_session.closed = False
+        mock_session.close = AsyncMock()
+
+        async with PajGpsApi("test@example.com", "password") as api:
+            api._session = mock_session
+            api._owns_session = True
+            self.assertIsNotNone(api)
+
+        mock_session.close.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
