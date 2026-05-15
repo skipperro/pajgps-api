@@ -19,7 +19,7 @@ SAMPLE_TRACKING_POINT = {
     "lng": 6.483,
     "direction": 180,
     "dateunix": 1700000000,
-    "battery": 85,
+    "battery_level": 85,
     "speed": 30,
     "iddevice": 42,
     "steps": 0,
@@ -59,6 +59,21 @@ class TestGetTrackingDataLastMinutes(unittest.IsolatedAsyncioTestCase):
         args, kwargs = mock_execute.call_args
         self.assertIn("/api/v1/trackerdata/42/last_minutes", args[1])
         self.assertEqual(kwargs["params"]["lastMinutes"], 60)
+
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_battery_level_property_accessible(self, mock_execute):
+        """Verify that the renamed battery_level property (was: battery) is accessible and correct."""
+        mock_response = AsyncMock()
+        mock_response.json = AsyncMock(return_value={"success": [SAMPLE_TRACKING_POINT]})
+        mock_execute.return_value = mock_response
+
+        result = await self.api.get_tracking_data_last_minutes(42, 60)
+
+        point = result[0]
+        self.assertIsInstance(point, TrackPoint)
+        self.assertTrue(hasattr(point, "battery_level"), "TrackPoint must have 'battery_level' property")
+        self.assertFalse(hasattr(point, "battery"), "Old 'battery' property must not exist on TrackPoint")
+        self.assertEqual(point.battery_level, 85)
 
     @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
     async def test_last_minutes_with_optional_params(self, mock_execute):
@@ -331,6 +346,23 @@ class TestTrackingIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(hasattr(point, "lat"))
         self.assertTrue(hasattr(point, "lng"))
         print(f"\nGot {len(result)} last position(s) for {len(device_ids)} device(s)")
+
+    @unittest.skipIf(not os.getenv("PAJGPS_EMAIL") or not os.getenv("PAJGPS_PASSWORD"), "Credentials not found in .env")
+    async def test_real_battery_level_property(self):
+        """Verify that battery_level (renamed from battery) is accessible on a real TrackPoint from the API."""
+        await self.api.login()
+        devices = await self.api.get_devices()
+        self.assertGreater(len(devices), 0, "Need at least one device")
+
+        device_id = devices[0].id
+        result = await self.api.get_tracking_data_last_points(device_id, 1)
+
+        self.assertGreater(len(result), 0, "Expected at least one tracking point")
+        point = result[0]
+        self.assertIsInstance(point, TrackPoint)
+        self.assertTrue(hasattr(point, "battery_level"), "TrackPoint must have 'battery_level' property")
+        self.assertIsNone(point.battery_level) if point.battery_level is None else self.assertIsInstance(point.battery_level, int)
+        print(f"\nDevice {device_id}: battery_level={point.battery_level}")
 
     @unittest.skipIf(not os.getenv("PAJGPS_EMAIL") or not os.getenv("PAJGPS_PASSWORD"), "Credentials not found in .env")
     async def test_real_get_last_sensor_data(self):

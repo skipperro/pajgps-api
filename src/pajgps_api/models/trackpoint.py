@@ -11,7 +11,7 @@ class TrackPoint(BaseModel):
     lng: Optional[float] = None
     direction: Optional[int] = None
     dateunix: Optional[int] = None
-    battery: Optional[int] = None
+    battery_level: Optional[int] = None
     speed: Optional[int] = None
     iddevice: Optional[int] = None
     steps: Optional[int] = None
