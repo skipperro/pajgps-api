@@ -1,6 +1,7 @@
 from typing import Any, List, Optional
 
 from .base import BaseModel
+from .device_model import DeviceModel
 
 
 class Device(BaseModel):
@@ -121,9 +122,34 @@ class Device(BaseModel):
     shutdown_protection_status: Optional[int] = None
     subAccounts: Optional[List[Any]] = None
     customImgUrl: Optional[str] = None
-    device_models: Optional[Any] = None
+    device_models: Optional[List[DeviceModel]] = None
     appmode: Optional[str] = None
     device_restriction: Optional[Any] = None
 
     def __init__(self, **kwargs: Any) -> None:
+        raw_models = kwargs.get("device_models")
+        kwargs["device_models"] = self._parse_device_models(raw_models)
         super().__init__(**kwargs)
+
+    @staticmethod
+    def _parse_device_models(raw: Any) -> Optional[List[DeviceModel]]:
+        """Deserialize raw device_models value into a list of DeviceModel instances.
+
+        The API may return a list of dicts, an empty list, None, or the string "{}".
+        All non-list cases are treated as no model data.
+        """
+        if not isinstance(raw, list):
+            return None
+        return [DeviceModel(**item) for item in raw if isinstance(item, dict)]
+
+    @property
+    def has_battery(self) -> bool:
+        """Return True if the device has a built-in standalone battery.
+
+        Based on the device model's standalone_battery field: only a value of 1
+        means the device has a battery. Any other value, or absence of model data,
+        means no battery.
+        """
+        if not self.device_models:
+            return False
+        return self.device_models[0].standalone_battery == 1
