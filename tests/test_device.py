@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import aiohttp
 from pajgps_api.pajgps_api import PajGpsApi
 from pajgps_api.pajgps_api_error import RequestError
-from pajgps_api.models import Device
+from pajgps_api.models import Device, DeviceModel
 
 # Load environment variables from src/.env
 dotenv_path = os.path.join(os.path.dirname(__file__), '..', 'src', '.env')
@@ -184,7 +184,9 @@ class TestDeviceIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(hasattr(first, "id"))
         self.assertTrue(hasattr(first, "name"))
         self.assertTrue(hasattr(first, "imei"))
-        print(f"\nFound {len(devices)} device(s). First: id={first.id}, name={first.name}")
+        for device in devices:
+            self.assertIsInstance(device.has_battery, bool)
+        print(f"\nFound {len(devices)} device(s). First: id={first.id}, name={first.name}, has_battery={first.has_battery}")
 
     @unittest.skipIf(not os.getenv("PAJGPS_EMAIL") or not os.getenv("PAJGPS_PASSWORD"), "Credentials not found in .env")
     async def test_real_get_device_by_id(self):
@@ -200,7 +202,50 @@ class TestDeviceIntegration(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(device.id, device_id)
         self.assertTrue(hasattr(device, "name"))
         self.assertTrue(hasattr(device, "imei"))
-        print(f"\nDevice {device_id}: name={device.name}, imei={device.imei}")
+        self.assertIsInstance(device.has_battery, bool)
+        print(f"\nDevice {device_id}: name={device.name}, imei={device.imei}, has_battery={device.has_battery}")
+
+
+class TestDeviceHasBattery(unittest.TestCase):
+    """Unit tests for the Device.has_battery property."""
+
+    def _make_device(self, device_models_raw):
+        return Device(id=1, name="Test", device_models=device_models_raw)
+
+    def test_has_battery_true_when_standalone_battery_is_1(self):
+        device = self._make_device([{"standalone_battery": 1}])
+        self.assertTrue(device.has_battery)
+
+    def test_has_battery_false_when_standalone_battery_is_minus_1(self):
+        # -1 is the known value for externally powered (USB) devices
+        device = self._make_device([{"standalone_battery": -1}])
+        self.assertFalse(device.has_battery)
+
+    def test_has_battery_false_when_standalone_battery_is_0(self):
+        device = self._make_device([{"standalone_battery": 0}])
+        self.assertFalse(device.has_battery)
+
+    def test_has_battery_false_when_standalone_battery_is_none(self):
+        device = self._make_device([{"standalone_battery": None}])
+        self.assertFalse(device.has_battery)
+
+    def test_has_battery_false_when_device_models_is_empty_list(self):
+        device = self._make_device([])
+        self.assertFalse(device.has_battery)
+
+    def test_has_battery_false_when_device_models_is_none(self):
+        device = self._make_device(None)
+        self.assertFalse(device.has_battery)
+
+    def test_has_battery_false_when_device_models_is_api_string_fallback(self):
+        # The API sometimes returns "{}" as a string instead of a list
+        device = self._make_device("{}")
+        self.assertFalse(device.has_battery)
+
+    def test_device_models_parsed_as_device_model_instances(self):
+        device = self._make_device([{"model": "Allround FINDER 2G 2.0", "standalone_battery": 1}])
+        self.assertIsInstance(device.device_models[0], DeviceModel)
+        self.assertEqual(device.device_models[0].model, "Allround FINDER 2G 2.0")
 
 
 if __name__ == '__main__':
