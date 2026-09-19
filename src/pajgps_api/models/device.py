@@ -153,3 +153,15 @@ class Device(BaseModel):
         if not self.device_models:
             return False
         return self.device_models[0].standalone_battery == 1
+
+    @property
+    def has_voltage_sensor(self) -> bool:
+        """Return True if the device has a built-in voltage sensor.
+
+        Based on the device model's alarm_volt field: only a value of 1
+        means the device has a voltage sensor. Any other value, or absence of model data,
+        means no voltage sensor.
+        """
+        if not self.device_models:
+            return False
+        return self.device_models[0].alarm_volt == 1
