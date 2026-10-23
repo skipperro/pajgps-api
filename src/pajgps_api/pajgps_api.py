@@ -1,10 +1,11 @@
+import asyncio
 from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
 
 from .alert_types import AlertType
 from .pajgps_requests import PajGpsRequests
-from .pajgps_api_error import AuthenticationError, TokenRefreshError, PajGpsApiError
+from .pajgps_api_error import AuthenticationError, TokenRefreshError, PajGpsApiError, RequestError
 from .models import Device, TrackPoint, SensorData, AuthResponse, Notification
 
 
@@ -47,8 +48,12 @@ class PajGpsApi(PajGpsRequests):
             else:
                 raise AuthenticationError(f"Login failed: {data.get('error', 'Unknown error')}")
 
-        except aiohttp.ClientError as e:
-            raise AuthenticationError(f"Request failed: {str(e)}")
+        except aiohttp.ClientResponseError as e:
+            if e.status in (400, 401, 403):
+                raise AuthenticationError(f"Login failed: {e.message}") from e
+            raise RequestError(f"Request failed: {str(e)}") from e
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            raise RequestError(f"Request failed: {str(e)}") from e
 
     async def update_token(self) -> AuthResponse:
         """Refresh the access token using the refresh token."""
@@ -72,8 +77,12 @@ class PajGpsApi(PajGpsRequests):
             else:
                 raise TokenRefreshError(f"Token refresh failed: {data.get('error', 'Unknown error')}")
 
-        except aiohttp.ClientError as e:
-            raise TokenRefreshError(f"Request failed: {str(e)}")
+        except aiohttp.ClientResponseError as e:
+            if e.status in (400, 401, 403):
+                raise TokenRefreshError(f"Token refresh failed: {e.message}") from e
+            raise RequestError(f"Request failed: {str(e)}") from e
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            raise RequestError(f"Request failed: {str(e)}") from e
 
     # ── Device endpoints ──────────────────────────────────────────────
 
