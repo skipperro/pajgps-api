@@ -1,6 +1,6 @@
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Iterable, Optional, Set
 
 import aiohttp
 
@@ -89,6 +89,7 @@ class PajGpsRequests(ABC):
         url: str,
         headers: Optional[Dict[str, str]] = None,
         refresh_on_401: bool = True,
+        auth_statuses: Iterable[int] = (401,),
         **kwargs: Any,
     ) -> aiohttp.ClientResponse:
         """
@@ -97,8 +98,27 @@ class PajGpsRequests(ABC):
         - Retries are performed on network timeouts/connection errors and on HTTP statuses in `self._retry_statuses`.
         - 401 is handled specially by attempting a token refresh once within the same attempt (if `refresh_on_401` is True).
         Returns: aiohttp.ClientResponse
-        Raises: RequestError on final failure
+        Raises: AuthenticationError if the final HTTP status is in `auth_statuses`,
+                RequestError on any other final failure (HTTP error, connection error, timeout)
         """
+        try:
+            return await self._send_with_retries(method, url, headers, refresh_on_401, **kwargs)
+        except aiohttp.ClientResponseError as e:
+            if e.status in tuple(auth_statuses):
+                raise AuthenticationError(f"Unauthorized: {e.message}") from e
+            raise RequestError(f"API request failed: {str(e)}") from e
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            raise RequestError(f"Request failed: {str(e)}") from e
+
+    async def _send_with_retries(
+        self,
+        method: str,
+        url: str,
+        headers: Optional[Dict[str, str]],
+        refresh_on_401: bool,
+        **kwargs: Any,
+    ) -> aiohttp.ClientResponse:
+        """Perform the request with retries; raises raw aiohttp/asyncio errors on final failure."""
         headers = headers or {}
         # Pop timeout from kwargs if present to avoid multiple values
         timeout_override: Optional[int] = kwargs.pop("timeout", None)

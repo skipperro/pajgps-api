@@ -171,9 +171,10 @@ class TestExecuteRequestEdgePaths(unittest.IsolatedAsyncioTestCase):
         self.api._session = _make_mock_session(AsyncMock(side_effect=[resp_503, resp_503]))
 
         url = f"{self.api.base_url.rstrip('/')}/api/v1/test"
-        with self.assertRaises(aiohttp.ClientResponseError) as ctx:
+        with self.assertRaises(RequestError) as ctx:
             await self.api._execute_request("GET", url, refresh_on_401=False)
-        self.assertEqual(ctx.exception.status, 503)
+        self.assertIsInstance(ctx.exception.__cause__, aiohttp.ClientResponseError)
+        self.assertEqual(ctx.exception.__cause__.status, 503)
 
     async def test_connection_error_raises_on_last_attempt(self):
         """ClientConnectionError on every attempt should raise after max_retries."""
@@ -181,7 +182,7 @@ class TestExecuteRequestEdgePaths(unittest.IsolatedAsyncioTestCase):
         self.api._session = _make_mock_session(AsyncMock(side_effect=[conn_err, conn_err]))
 
         url = f"{self.api.base_url.rstrip('/')}/api/v1/test"
-        with self.assertRaises(aiohttp.ClientConnectionError):
+        with self.assertRaises(RequestError):
             await self.api._execute_request("GET", url, refresh_on_401=False)
 
 

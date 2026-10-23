@@ -1,10 +1,11 @@
+import asyncio
 import unittest
 import os
 from unittest.mock import patch, AsyncMock, MagicMock
 from dotenv import load_dotenv
 import aiohttp
 from pajgps_api.pajgps_api import PajGpsApi
-from pajgps_api.pajgps_api_error import AuthenticationError, TokenRefreshError
+from pajgps_api.pajgps_api_error import AuthenticationError, TokenRefreshError, RequestError
 from pajgps_api.models import AuthResponse
 
 # Load environment variables from src/.env
@@ -27,12 +28,36 @@ class TestLoginEdgeCases(unittest.IsolatedAsyncioTestCase):
 
     @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
     async def test_login_raises_on_client_error(self, mock_execute):
-        """login() should wrap aiohttp.ClientError into AuthenticationError."""
+        """login() should wrap aiohttp.ClientError into RequestError."""
         self.api = PajGpsApi("test@example.com", "password")
         mock_execute.side_effect = aiohttp.ClientError("connection refused")
-        with self.assertRaises(AuthenticationError) as ctx:
+        with self.assertRaises(RequestError) as ctx:
             await self.api.login()
         self.assertIn("Request failed", str(ctx.exception))
+
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_login_raises_request_error_on_timeout(self, mock_execute):
+        """login() should wrap asyncio.TimeoutError into RequestError."""
+        self.api = PajGpsApi("test@example.com", "password")
+        mock_execute.side_effect = asyncio.TimeoutError()
+        with self.assertRaises(RequestError):
+            await self.api.login()
+
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_login_maps_401_to_authentication_error(self, mock_execute):
+        """login() should map HTTP 401 to AuthenticationError."""
+        self.api = PajGpsApi("test@example.com", "password")
+        mock_execute.side_effect = aiohttp.ClientResponseError(MagicMock(), (), status=401, message="Unauthorized")
+        with self.assertRaises(AuthenticationError):
+            await self.api.login()
+
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_login_maps_500_to_request_error(self, mock_execute):
+        """login() should map HTTP 500 to RequestError."""
+        self.api = PajGpsApi("test@example.com", "password")
+        mock_execute.side_effect = aiohttp.ClientResponseError(MagicMock(), (), status=500, message="Server Error")
+        with self.assertRaises(RequestError):
+            await self.api.login()
 
     @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
     async def test_login_raises_on_error_response(self, mock_execute):
@@ -70,13 +95,22 @@ class TestUpdateTokenEdgeCases(unittest.IsolatedAsyncioTestCase):
 
     @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
     async def test_update_token_raises_on_client_error(self, mock_execute):
-        """update_token() should wrap aiohttp.ClientError into TokenRefreshError."""
+        """update_token() should wrap aiohttp.ClientError into RequestError."""
         self.api = PajGpsApi("test@example.com", "password")
         self.api.refresh_token = "valid_refresh_token"
         mock_execute.side_effect = aiohttp.ClientError("connection refused")
-        with self.assertRaises(TokenRefreshError) as ctx:
+        with self.assertRaises(RequestError) as ctx:
             await self.api.update_token()
         self.assertIn("Request failed", str(ctx.exception))
+
+    @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
+    async def test_update_token_maps_401_to_token_refresh_error(self, mock_execute):
+        """update_token() should map HTTP 401 to TokenRefreshError."""
+        self.api = PajGpsApi("test@example.com", "password")
+        self.api.refresh_token = "valid_refresh_token"
+        mock_execute.side_effect = aiohttp.ClientResponseError(MagicMock(), (), status=401, message="Unauthorized")
+        with self.assertRaises(TokenRefreshError):
+            await self.api.update_token()
 
     @patch("pajgps_api.pajgps_requests.PajGpsRequests._execute_request")
     async def test_update_token_raises_on_error_response(self, mock_execute):
@@ -327,7 +361,7 @@ class TestExecuteRequest401Branches(unittest.IsolatedAsyncioTestCase):
         self.api._session = _make_session([resp_401])
 
         url = f"{self.api.base_url.rstrip('/')}/api/v1/test"
-        with self.assertRaises(aiohttp.ClientResponseError):
+        with self.assertRaises(AuthenticationError):
             await self.api._execute_request("GET", url, refresh_on_401=True)
 
 
@@ -350,7 +384,7 @@ class TestExecuteRequest401NoCredentials(unittest.IsolatedAsyncioTestCase):
         self.api._session = _make_session([resp_401])
 
         url = f"{self.api.base_url.rstrip('/')}/api/v1/test"
-        with self.assertRaises((TokenRefreshError, aiohttp.ClientResponseError)):
+        with self.assertRaises(AuthenticationError):
             await self.api._execute_request("GET", url, refresh_on_401=True)
 
 
@@ -399,3 +433,51 @@ class TestAuthIntegration(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestExecuteRequestErrorMapping(unittest.IsolatedAsyncioTestCase):
+    """_execute_request should raise the library's exception types."""
+
+    async def asyncTearDown(self):
+        await self.api.close()
+
+    def _api_with_session_error(self, exc):
+        session = MagicMock()
+        session.closed = False
+        session.request = AsyncMock(side_effect=exc)
+        self.api = PajGpsApi("test@example.com", "password", max_retries=1, websession=session)
+        return self.api
+
+    async def test_timeout_raises_request_error(self):
+        api = self._api_with_session_error(asyncio.TimeoutError())
+        with self.assertRaises(RequestError):
+            await api._execute_request("GET", "http://x/y")
+
+    async def test_connection_error_raises_request_error(self):
+        api = self._api_with_session_error(aiohttp.ClientConnectionError("refused"))
+        with self.assertRaises(RequestError):
+            await api._execute_request("GET", "http://x/y")
+
+    async def test_final_5xx_raises_request_error(self):
+        resp = MagicMock()
+        resp.status = 503
+        resp.raise_for_status = MagicMock(
+            side_effect=aiohttp.ClientResponseError(MagicMock(), (), status=503, message="Unavailable"))
+        session = MagicMock()
+        session.closed = False
+        session.request = AsyncMock(return_value=resp)
+        self.api = PajGpsApi(max_retries=1, websession=session)
+        with self.assertRaises(RequestError):
+            await self.api._execute_request("GET", "http://x/y")
+
+    async def test_401_raises_authentication_error(self):
+        resp = MagicMock()
+        resp.status = 401
+        resp.raise_for_status = MagicMock(
+            side_effect=aiohttp.ClientResponseError(MagicMock(), (), status=401, message="Unauthorized"))
+        session = MagicMock()
+        session.closed = False
+        session.request = AsyncMock(return_value=resp)
+        self.api = PajGpsApi(max_retries=1, websession=session)
+        with self.assertRaises(AuthenticationError):
+            await self.api._execute_request("GET", "http://x/y", refresh_on_401=False)
