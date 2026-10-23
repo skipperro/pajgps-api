@@ -35,7 +35,7 @@ class PajGpsApi(PajGpsRequests):
 
         url: str = f"{self.base_url.rstrip('/')}/api/v1/login"
         try:
-            response = await self._execute_request("POST", url, params=params, refresh_on_401=False)
+            response = await self._execute_request("POST", url, params=params, refresh_on_401=False, auth_statuses=(400, 401, 403))
             data: Dict[str, Any] = await response.json()
 
             if "success" in data:
@@ -67,7 +67,7 @@ class PajGpsApi(PajGpsRequests):
 
         url: str = f"{self.base_url.rstrip('/')}/api/v1/updatetoken"
         try:
-            response = await self._execute_request("POST", url, params=params, refresh_on_401=False)
+            response = await self._execute_request("POST", url, params=params, refresh_on_401=False, auth_statuses=(400, 401, 403))
             data: Dict[str, Any] = await response.json()
 
             if "success" in data:
@@ -77,6 +77,8 @@ class PajGpsApi(PajGpsRequests):
             else:
                 raise TokenRefreshError(f"Token refresh failed: {data.get('error', 'Unknown error')}")
 
+        except AuthenticationError as e:
+            raise TokenRefreshError(f"Token refresh failed: {e}") from e
         except aiohttp.ClientResponseError as e:
             if e.status in (400, 401, 403):
                 raise TokenRefreshError(f"Token refresh failed: {e.message}") from e
